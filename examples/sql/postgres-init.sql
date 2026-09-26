@@ -1,19 +1,16 @@
-CREATE DATABASE IF NOT EXISTS shop;
-USE shop;
-
 CREATE TABLE customers (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  name VARCHAR(100) NOT NULL,
-  email VARCHAR(200) NOT NULL,
-  country VARCHAR(2) NOT NULL
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  country CHAR(2) NOT NULL
 );
 
 CREATE TABLE orders (
-  id INT PRIMARY KEY AUTO_INCREMENT,
+  id SERIAL PRIMARY KEY,
   customer_id INT NOT NULL REFERENCES customers(id),
-  total DECIMAL(10, 2) NOT NULL,
-  status VARCHAR(20) NOT NULL,
-  created_at DATETIME NOT NULL
+  total NUMERIC(10, 2) NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL
 );
 
 INSERT INTO customers (name, email, country) VALUES
@@ -27,6 +24,6 @@ INSERT INTO orders (customer_id, total, status, created_at) VALUES
   (2, 990.00, 'shipped', '2026-01-21 09:15:00'),
   (3, 15.75, 'cancelled', '2026-03-05 18:45:00');
 
--- Least-privilege user for the MCP server (no DELETE, no DDL).
-CREATE USER IF NOT EXISTS 'mcp'@'%' IDENTIFIED BY 'mcp_password';
-GRANT SELECT, INSERT, UPDATE ON shop.* TO 'mcp'@'%';
+-- Least-privilege, read-only user for the MCP server.
+CREATE USER mcp WITH PASSWORD 'mcp_password';
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO mcp;
