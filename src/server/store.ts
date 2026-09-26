@@ -1,6 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { watch, type FSWatcher } from 'node:fs';
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { z } from 'zod';
 import {
@@ -28,8 +27,9 @@ export class ConfigStore extends EventEmitter {
   // Tools that parsed but failed cross-checks still count as references to a connection.
   private toolRefs = new Map<string, string>();
   private problems: Invalid[] = [];
-  private watchers: FSWatcher[] = [];
+  private signature = '';
   private timer?: NodeJS.Timeout;
+  private polling = false;
 
   constructor(
     private dataDir: string,
@@ -95,6 +95,7 @@ export class ConfigStore extends EventEmitter {
       else tools.set(t.name, t);
     }
 
+    this.signature = await this.computeSignature();
     for (const p of problems) this.log?.warn(p, 'invalid config file');
     this.conns = conns;
     this.toolMap = tools;
@@ -102,23 +103,41 @@ export class ConfigStore extends EventEmitter {
     this.problems = problems;
   }
 
-  /** Watches the data directories and reloads (debounced) on any change. */
-  watch(): void {
-    const onChange = () => {
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => {
-        this.load()
-          .then(() => this.emit('change'))
-          .catch((e) => this.log?.warn({ err: e }, 'reload failed'));
-      }, 100);
+  /** File names + mtimes + sizes; changes whenever anything in the data dirs changes. */
+  private async computeSignature(): Promise<string> {
+    const parts: string[] = [];
+    for (const kind of ['connections', 'tools'] as const) {
+      for (const f of (await readdir(this.dir(kind))).filter((f) => f.endsWith('.json')).sort()) {
+        const st = await stat(join(this.dir(kind), f)).catch(() => undefined);
+        if (st) parts.push(`${kind}/${f}:${st.mtimeMs}:${st.size}`);
+      }
+    }
+    return parts.join('|');
+  }
+
+  /**
+   * Polls the data directories and reloads when files change. Polling (rather than
+   * fs.watch) works reliably on Docker bind mounts and network volumes.
+   */
+  watch(intervalMs = 1000): void {
+    this.polling = true;
+    const tick = async () => {
+      try {
+        if ((await this.computeSignature()) !== this.signature) {
+          await this.load();
+          this.emit('change');
+        }
+      } catch (e) {
+        this.log?.warn({ err: e }, 'reload failed');
+      }
+      if (this.polling) this.timer = setTimeout(tick, intervalMs);
     };
-    for (const kind of ['connections', 'tools'] as const) this.watchers.push(watch(this.dir(kind), onChange));
+    this.timer = setTimeout(tick, intervalMs);
   }
 
   close(): void {
+    this.polling = false;
     clearTimeout(this.timer);
-    for (const w of this.watchers) w.close();
-    this.watchers = [];
   }
 
   connections = () => [...this.conns.values()];

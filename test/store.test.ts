@@ -68,7 +68,7 @@ describe('ConfigStore', () => {
 
   it('emits change when a file is edited externally', async () => {
     await store.load();
-    store.watch();
+    store.watch(50);
     const changed = new Promise<void>((resolve, reject) => {
       store.once('change', () => resolve());
       setTimeout(() => reject(new Error('no change event')), 3000);
