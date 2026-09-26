@@ -24,20 +24,20 @@ docker run -d --name sql-mcp -p 3000:3000 \
   -e API_KEY="$(openssl rand -hex 32)" \
   -e SECRET_KEY="$(openssl rand -hex 32)" \
   -e ADMIN_PASSWORD="choose-a-password" \
-  ghcr.io/OWNER/sql-mcp:latest
+  ghcr.io/devimfaheem/relationaldb-mcp:latest
 ```
 
 Open http://localhost:3000, sign in as `admin`, add a connection, then create a tool.
 Run `docker exec sql-mcp printenv API_KEY` to get the key Claude will use.
 
-> Replace `OWNER` with the GitHub user or org that publishes the image, or build it yourself with `docker build -t sql-mcp .`
+> The image is published when a `v*` tag is pushed. You can also build it yourself: `docker build -t relationaldb-mcp .`
 
 ### Try the demo stack
 
 The repo includes a compose file with sample MySQL and PostgreSQL databases (and optionally SQL Server) plus example tools:
 
 ```bash
-git clone https://github.com/OWNER/sql-mcp.git && cd sql-mcp
+git clone https://github.com/devimfaheem/relationaldb-mcp.git && cd relationaldb-mcp
 cp .env.example .env        # fill in API_KEY, SECRET_KEY and ADMIN_PASSWORD
 docker compose up --build   # add --profile mssql to include SQL Server
 ```
