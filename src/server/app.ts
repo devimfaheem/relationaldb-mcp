@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
+import { registerAdmin } from './admin.js';
 import type { PoolManager } from './db/pools.js';
 import type { Env } from './env.js';
 import { createExecutor } from './executor.js';
@@ -31,6 +32,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.get('/healthz', async () => ({ ok: true }));
   registerMcp(app, { env, store, executor, version: pkg.version });
+  registerAdmin(app, { env, store, pools, secrets: deps.secrets, executor, version: pkg.version });
 
   if (deps.uiDir && existsSync(deps.uiDir)) {
     await app.register(fastifyStatic, { root: deps.uiDir });
