@@ -14,7 +14,100 @@ Claude ──HTTPS + API key──►  /mcp   ─┐
 You    ──browser + login ──►  /      ├─ sql-mcp ──► MySQL / PostgreSQL / SQL Server
                               /api  ─┘      │
                                      /data/{connections,tools}/*.json
+                                     /data/sqlmcp.db (admin users)
 ```
+
+## How it works
+
+### Full workflow
+
+From first start, through setting up connections and tools in the admin UI, to Claude calling a tool:
+
+```mermaid
+flowchart TD
+    subgraph setup["1. First start"]
+        A["docker run / npm start"] --> B["Run migrations on DATA_DIR/sqlmcp.db"]
+        B --> C{"Any users yet?"}
+        C -- no --> D["Seed admin / admin<br/>(password change required)"]
+        C -- yes --> E["Keep existing users"]
+    end
+
+    subgraph admin["2. Admin UI (browser → /api)"]
+        F["Sign in"] --> G{"Must change<br/>password?"}
+        G -- yes --> H["Set new password<br/>(API returns 403 until done)"]
+        H --> I["Admin UI"]
+        G -- no --> I
+        I --> J["Add connection<br/>(password encrypted)"]
+        I --> L["Create tool<br/>(SQL + typed parameters)"]
+        J --> K["Test connection"]
+        L --> M["Test run"]
+    end
+
+    subgraph disk["3. Config on disk (DATA_DIR)"]
+        N[("connections/*.json")]
+        O[("tools/*.json")]
+    end
+
+    subgraph mcp["4. Claude (→ /mcp)"]
+        P["Connect with Bearer API key"] --> Q["tools/list"]
+        Q --> R["tools/call"]
+        R --> S{"Valid key and<br/>arguments?"}
+        S -- no --> T["Error returned<br/>(database not touched)"]
+        S -- yes --> U["Compile :name placeholders<br/>to ? / $1 / @name"]
+    end
+
+    subgraph db["5. Your database"]
+        V["Connection pool<br/>(created on first use)"] --> W[("MySQL / PostgreSQL / SQL Server")]
+        W --> X["Rows, or affectedRows for write tools"]
+    end
+
+    D --> F
+    E --> F
+    J --> N
+    L --> O
+    N -. "reloaded within ~1s" .-> Q
+    O -. "list_changed sent to Claude" .-> Q
+    K -. "temporary connection" .-> W
+    M --> U
+    U --> V
+```
+
+### When is the database connection opened?
+
+Saving a connection in the UI only writes a JSON file. The real connection is opened when it's first needed:
+
+```mermaid
+sequenceDiagram
+    participant UI as Admin UI
+    participant S as sql-mcp
+    participant F as connections/*.json
+    participant DB as Database
+    participant C as Claude
+
+    UI->>S: Test connection
+    S->>DB: Open temporary connection, SELECT 1
+    DB-->>S: OK
+    S-->>UI: "Connection succeeded" (connection closed)
+
+    UI->>S: Save connection
+    S->>F: Write JSON (password encrypted)
+    Note over S,DB: No connection is held open yet
+
+    C->>S: tools/call get_customer_orders
+    S->>DB: Create pool on first use, run query
+    DB-->>S: Rows
+    S-->>C: Result
+
+    C->>S: tools/call (again)
+    S->>DB: Reuse pooled connection
+
+    UI->>S: Edit or delete connection
+    S->>DB: Close old pool (a new one opens on the next call)
+```
+
+- Read tools run in a read-only transaction (MySQL, PostgreSQL). On SQL Server they run in a transaction that is always rolled back.
+- A test run in the UI goes through exactly the same path as a call from Claude.
+- On restart, pools are recreated lazily. Nothing connects to your databases until a tool is used.
 
 ## Quick start (Docker)
 
