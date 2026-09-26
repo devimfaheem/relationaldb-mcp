@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.build.json && vite build",
     "start": "node dist/server/index.js",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
