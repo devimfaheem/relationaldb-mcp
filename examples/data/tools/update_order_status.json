@@ -1,0 +1,11 @@
+{
+  "name": "update_order_status",
+  "description": "Changes the status of a single order. Use only when the user explicitly asks to update an order.",
+  "connection": "demo_mysql",
+  "mode": "write",
+  "query": "UPDATE orders SET status = :status WHERE id = :order_id",
+  "parameters": [
+    { "name": "order_id", "type": "integer", "required": true, "description": "Order ID" },
+    { "name": "status", "type": "string", "required": true, "enum": ["pending", "shipped", "cancelled"], "description": "New status" }
+  ]
+}

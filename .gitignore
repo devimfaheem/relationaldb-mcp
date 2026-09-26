@@ -1,7 +1,7 @@
 node_modules/
 dist/
 .env
-data/
+/data/
 *.tmp
 .DS_Store
 .claude/

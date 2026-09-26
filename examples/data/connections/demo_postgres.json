@@ -1,0 +1,9 @@
+{
+  "id": "demo_postgres",
+  "engine": "postgres",
+  "host": "postgres",
+  "port": 5432,
+  "database": "shop",
+  "user": "mcp",
+  "password": "${DEMO_POSTGRES_PASSWORD}"
+}

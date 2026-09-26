@@ -1,0 +1,9 @@
+{
+  "id": "demo_mysql",
+  "engine": "mysql",
+  "host": "mysql",
+  "port": 3306,
+  "database": "shop",
+  "user": "mcp",
+  "password": "${DEMO_MYSQL_PASSWORD}"
+}

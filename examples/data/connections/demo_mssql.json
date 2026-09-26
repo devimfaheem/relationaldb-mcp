@@ -1,0 +1,10 @@
+{
+  "id": "demo_mssql",
+  "engine": "mssql",
+  "host": "mssql",
+  "port": 1433,
+  "database": "shop",
+  "user": "mcp",
+  "password": "${DEMO_MSSQL_PASSWORD}",
+  "ssl": { "enabled": true, "rejectUnauthorized": false }
+}

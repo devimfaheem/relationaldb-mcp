@@ -1,0 +1,10 @@
+{
+  "name": "revenue_by_country",
+  "description": "Total shipped revenue per country since a given date.",
+  "connection": "demo_mssql",
+  "mode": "read",
+  "query": "SELECT c.country, SUM(o.total) AS revenue, COUNT(*) AS orders FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.status = 'shipped' AND o.created_at >= :since GROUP BY c.country ORDER BY revenue DESC",
+  "parameters": [
+    { "name": "since", "type": "date", "default": "2026-01-01", "description": "Start date (YYYY-MM-DD)" }
+  ]
+}

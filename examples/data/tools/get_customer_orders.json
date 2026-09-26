@@ -1,0 +1,13 @@
+{
+  "name": "get_customer_orders",
+  "description": "Returns a customer's orders, newest first. Optionally filter by status.",
+  "connection": "demo_mysql",
+  "mode": "read",
+  "query": "SELECT id, total, status, created_at FROM orders WHERE customer_id = :customer_id AND (:status IS NULL OR status = :status) ORDER BY created_at DESC LIMIT :limit",
+  "parameters": [
+    { "name": "customer_id", "type": "integer", "required": true, "description": "Customer ID" },
+    { "name": "status", "type": "string", "enum": ["pending", "shipped", "cancelled"], "description": "Only return orders with this status" },
+    { "name": "limit", "type": "integer", "default": 50, "min": 1, "max": 500, "description": "Maximum number of orders to return" }
+  ],
+  "limits": { "maxRows": 500, "timeoutMs": 15000 }
+}

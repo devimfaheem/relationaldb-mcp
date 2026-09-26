@@ -1,0 +1,12 @@
+{
+  "name": "search_customers",
+  "description": "Finds customers whose name or email contains the search text, optionally within a country.",
+  "connection": "demo_postgres",
+  "mode": "read",
+  "query": "SELECT id, name, email, country FROM customers WHERE (name ILIKE '%' || :q || '%' OR email ILIKE '%' || :q || '%') AND (:country::text IS NULL OR country = :country) ORDER BY name",
+  "parameters": [
+    { "name": "q", "type": "string", "required": true, "maxLength": 100, "description": "Text to search for" },
+    { "name": "country", "type": "string", "pattern": "^[A-Z]{2}$", "description": "Two-letter country code, e.g. GB" }
+  ],
+  "limits": { "maxRows": 100, "timeoutMs": 10000 }
+}
