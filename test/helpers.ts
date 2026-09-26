@@ -1,11 +1,13 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openAppDb } from '../src/server/appdb.js';
 import { buildApp } from '../src/server/app.js';
 import { PoolManager } from '../src/server/db/pools.js';
 import { loadEnv, type Env } from '../src/server/env.js';
 import { createSecrets } from '../src/server/secrets.js';
 import { ConfigStore } from '../src/server/store.js';
+import { createUsers } from '../src/server/users.js';
 import { createFakeDriver, type FakeDriver } from './fake-driver.js';
 
 export const API_KEY = 'test-api-key-'.padEnd(40, 'x');
@@ -21,15 +23,18 @@ export const demoTool = {
   parameters: [{ name: 'customer_id', type: 'integer', required: true, description: 'Customer id' }],
 };
 
-/** Builds an app over a temp data dir, with every engine backed by one fake driver. */
-export async function setupApp(opts: { env?: Partial<Env>; files?: Record<string, unknown> } = {}) {
+/**
+ * Builds an app over a temp data dir, with every engine backed by one fake driver.
+ * The admin password is set to ADMIN_PASSWORD unless `freshAdmin` keeps the seeded admin/admin.
+ */
+export async function setupApp(opts: { env?: Partial<Env>; files?: Record<string, unknown>; freshAdmin?: boolean } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'sqlmcp-app-'));
   for (const [path, body] of Object.entries(opts.files ?? {})) {
     await mkdir(join(dir, path, '..'), { recursive: true });
     await writeFile(join(dir, path), JSON.stringify(body));
   }
   const env = {
-    ...loadEnv({ API_KEY, ADMIN_PASSWORD, SECRET_KEY: 's'.repeat(32), DATA_DIR: dir }),
+    ...loadEnv({ API_KEY, SECRET_KEY: 's'.repeat(32), DATA_DIR: dir }),
     ...opts.env,
   };
   const driver: FakeDriver = createFakeDriver();
@@ -38,7 +43,10 @@ export async function setupApp(opts: { env?: Partial<Env>; files?: Record<string
   const pools = new PoolManager({ secrets, factories: { mysql: factory, postgres: factory, mssql: factory } });
   const store = new ConfigStore(dir);
   await store.load();
-  const app = await buildApp({ env, store, pools, secrets });
+  const db = openAppDb(join(dir, 'sqlmcp.db'));
+  const users = createUsers(db);
+  if (!opts.freshAdmin) users.changePassword('admin', ADMIN_PASSWORD);
+  const app = await buildApp({ env, store, pools, secrets, users });
   return {
     app,
     dir,
@@ -48,6 +56,7 @@ export async function setupApp(opts: { env?: Partial<Env>; files?: Record<string
     async cleanup() {
       store.close();
       await app.close();
+      db.close();
       await rm(dir, { recursive: true, force: true });
     },
   };

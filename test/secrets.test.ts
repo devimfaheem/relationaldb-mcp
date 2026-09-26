@@ -35,11 +35,10 @@ describe('secrets', () => {
 });
 
 describe('loadEnv', () => {
-  const good = { API_KEY: 'a'.repeat(32), ADMIN_PASSWORD: 'password', SECRET_KEY: KEY };
+  const good = { API_KEY: 'a'.repeat(32), SECRET_KEY: KEY };
 
   it('applies defaults', () => {
     expect(loadEnv(good)).toMatchObject({
-      adminUsername: 'admin',
       port: 3000,
       dataDir: '/data',
       allowQueryKey: false,
@@ -50,7 +49,6 @@ describe('loadEnv', () => {
   it('names the variable that is too short or missing', () => {
     expect(() => loadEnv({ ...good, API_KEY: 'short' })).toThrow('API_KEY must be at least 32 characters');
     expect(() => loadEnv({ ...good, SECRET_KEY: undefined })).toThrow('SECRET_KEY must be at least 32 characters');
-    expect(() => loadEnv({ ...good, ADMIN_PASSWORD: 'x' })).toThrow('ADMIN_PASSWORD must be at least 8 characters');
   });
 
   it('parses booleans and port', () => {

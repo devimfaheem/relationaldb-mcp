@@ -1,7 +1,5 @@
 export interface Env {
   apiKey: string;
-  adminUsername: string;
-  adminPassword: string;
   secretKey: string;
   port: number;
   dataDir: string;
@@ -23,8 +21,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be a valid port number');
   return {
     apiKey: required(source, 'API_KEY', 32),
-    adminUsername: source.ADMIN_USERNAME || 'admin',
-    adminPassword: required(source, 'ADMIN_PASSWORD', 8),
     secretKey: required(source, 'SECRET_KEY', 32),
     port,
     dataDir: source.DATA_DIR || '/data',

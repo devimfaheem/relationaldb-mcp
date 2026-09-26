@@ -10,9 +10,10 @@ import {
 import type { PoolManager } from './db/pools.js';
 import type { Env } from './env.js';
 import type { Executor } from './executor.js';
-import { clearSession, FailureLimiter, hasSession, safeEqual, setSession } from './auth.js';
+import { clearSession, FailureLimiter, sessionUser, setSession } from './auth.js';
 import { isEncrypted, isEnvRef, type Secrets } from './secrets.js';
 import { ConflictError, type ConfigStore } from './store.js';
+import { PasswordError, type Users } from './users.js';
 
 export const PASSWORD_MASK = '••••••';
 
@@ -22,14 +23,17 @@ interface Deps {
   pools: PoolManager;
   secrets: Secrets;
   executor: Executor;
+  users: Users;
   version: string;
 }
 
 type Body = Record<string, unknown>;
 
-export function registerAdmin(app: FastifyInstance, { env, store, pools, secrets, executor, version }: Deps): void {
+export function registerAdmin(app: FastifyInstance, { store, pools, secrets, executor, users, version }: Deps): void {
   const limiter = new FailureLimiter();
-  const PUBLIC = new Set(['/api/auth/login', '/api/auth/me']);
+  const PUBLIC = new Set(['/api/auth/login', '/api/auth/me', '/api/auth/logout']);
+  // Reachable while a password change is still required.
+  const PASSWORD_CHANGE_ALLOWED = new Set(['/api/auth/password']);
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
@@ -38,7 +42,12 @@ export function registerAdmin(app: FastifyInstance, { env, store, pools, secrets
       return reply.code(403).send({ error: 'Missing X-Requested-With header' });
     }
     const path = req.url.split('?')[0];
-    if (!PUBLIC.has(path) && !hasSession(req)) return reply.code(401).send({ error: 'Not logged in' });
+    if (PUBLIC.has(path)) return;
+    const user = users.get(sessionUser(req) ?? '');
+    if (!user) return reply.code(401).send({ error: 'Not logged in' });
+    if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(path)) {
+      return reply.code(403).send({ error: 'You must change the default password first', mustChangePassword: true });
+    }
   });
 
   const invalid = (reply: FastifyReply, errors: string[]) => reply.code(400).send({ errors });
@@ -47,19 +56,35 @@ export function registerAdmin(app: FastifyInstance, { env, store, pools, secrets
   app.post('/api/auth/login', async (req, reply) => {
     if (limiter.blocked(req.ip)) return reply.code(429).send({ error: 'Too many failed attempts, try again later' });
     const { username = '', password = '' } = (req.body ?? {}) as Body as { username?: string; password?: string };
-    const ok = safeEqual(String(username), env.adminUsername) && safeEqual(String(password), env.adminPassword);
-    if (!ok) {
+    const user = users.verify(String(username), String(password));
+    if (!user) {
       limiter.fail(req.ip);
       return reply.code(401).send({ error: 'Invalid username or password' });
     }
-    setSession(req, reply);
-    return { ok: true };
+    setSession(req, reply, user.username);
+    return { ok: true, mustChangePassword: user.mustChangePassword };
   });
   app.post('/api/auth/logout', async (_req, reply) => {
     clearSession(reply);
     return { ok: true };
   });
-  app.get('/api/auth/me', async (req) => ({ authenticated: hasSession(req) }));
+  app.get('/api/auth/me', async (req) => {
+    const user = users.get(sessionUser(req) ?? '');
+    return user ? { authenticated: true, ...user } : { authenticated: false };
+  });
+
+  app.post('/api/auth/password', async (req, reply) => {
+    const username = sessionUser(req)!;
+    const { currentPassword = '', newPassword = '' } = (req.body ?? {}) as { currentPassword?: string; newPassword?: string };
+    if (!users.verify(username, String(currentPassword))) return invalid(reply, ['Current password is incorrect']);
+    try {
+      users.changePassword(username, String(newPassword));
+    } catch (e) {
+      if (e instanceof PasswordError) return invalid(reply, [e.message]);
+      throw e;
+    }
+    return { ok: true };
+  });
 
   app.get('/api/status', async () => ({ version, invalid: store.invalid() }));
 

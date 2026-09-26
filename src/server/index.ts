@@ -1,10 +1,13 @@
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pino from 'pino';
+import { openAppDb } from './appdb.js';
 import { buildApp } from './app.js';
 import { PoolManager } from './db/pools.js';
 import { loadEnv, type Env } from './env.js';
 import { createSecrets } from './secrets.js';
 import { ConfigStore } from './store.js';
+import { createUsers } from './users.js';
 
 let env: Env;
 try {
@@ -15,6 +18,11 @@ try {
 }
 
 const logger = pino({ level: env.logLevel });
+const db = openAppDb(join(env.dataDir, 'sqlmcp.db'));
+const users = createUsers(db);
+if (users.get('admin')?.mustChangePassword) {
+  logger.warn('Default admin/admin login is active: sign in to the admin UI and set a new password');
+}
 const secrets = createSecrets(env.secretKey);
 const pools = new PoolManager({ secrets });
 const store = new ConfigStore(env.dataDir, logger);
@@ -26,6 +34,7 @@ const app = await buildApp({
   secrets,
   pools,
   store,
+  users,
   logger,
   uiDir: fileURLToPath(new URL('../ui', import.meta.url)),
 });
@@ -35,6 +44,7 @@ const shutdown = async () => {
   store.close();
   await app.close();
   await pools.closeAll();
+  db.close();
   process.exit(0);
 };
 process.on('SIGTERM', shutdown);

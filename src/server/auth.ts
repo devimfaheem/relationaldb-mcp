@@ -48,8 +48,9 @@ export class FailureLimiter {
 export const SESSION_COOKIE = 'sqlmcp_session';
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
-export function setSession(req: FastifyRequest, reply: FastifyReply): void {
-  reply.setCookie(SESSION_COOKIE, String(Date.now() + SESSION_TTL_MS), {
+/** Cookie value is `<username>|<expiry ms>`, signed with SECRET_KEY. */
+export function setSession(req: FastifyRequest, reply: FastifyReply, username: string): void {
+  reply.setCookie(SESSION_COOKIE, `${username}|${Date.now() + SESSION_TTL_MS}`, {
     path: '/',
     httpOnly: true,
     sameSite: 'strict',
@@ -63,9 +64,13 @@ export function clearSession(reply: FastifyReply): void {
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
-export function hasSession(req: FastifyRequest): boolean {
+/** Returns the logged-in username, or undefined if there is no valid session. */
+export function sessionUser(req: FastifyRequest): string | undefined {
   const raw = req.cookies[SESSION_COOKIE];
-  if (!raw) return false;
+  if (!raw) return undefined;
   const { valid, value } = req.unsignCookie(raw);
-  return valid && value !== null && Number(value) > Date.now();
+  if (!valid || !value) return undefined;
+  const sep = value.lastIndexOf('|');
+  const username = value.slice(0, sep);
+  return sep > 0 && Number(value.slice(sep + 1)) > Date.now() ? username : undefined;
 }

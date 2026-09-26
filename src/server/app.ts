@@ -9,12 +9,14 @@ import { createExecutor } from './executor.js';
 import { registerMcp } from './mcp.js';
 import type { Secrets } from './secrets.js';
 import type { ConfigStore } from './store.js';
+import type { Users } from './users.js';
 
 export interface AppDeps {
   env: Env;
   store: ConfigStore;
   pools: PoolManager;
   secrets: Secrets;
+  users: Users;
   /** Directory containing the built admin UI; skipped if missing. */
   uiDir?: string;
   logger?: FastifyBaseLogger;
@@ -32,7 +34,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.get('/healthz', async () => ({ ok: true }));
   registerMcp(app, { env, store, executor, version: pkg.version });
-  registerAdmin(app, { env, store, pools, secrets: deps.secrets, executor, version: pkg.version });
+  registerAdmin(app, { env, store, pools, secrets: deps.secrets, users: deps.users, executor, version: pkg.version });
 
   if (deps.uiDir && existsSync(deps.uiDir)) {
     await app.register(fastifyStatic, { root: deps.uiDir });

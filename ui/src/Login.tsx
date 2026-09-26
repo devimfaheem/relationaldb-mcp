@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { api, errorText } from './api';
 
-export function Login({ onLogin }: { onLogin: () => void }) {
-  const [username, setUsername] = useState('admin');
+export function Login({ onLogin }: { onLogin: (mustChangePassword: boolean) => void }) {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -12,8 +12,8 @@ export function Login({ onLogin }: { onLogin: () => void }) {
     setBusy(true);
     setError('');
     try {
-      await api('POST', '/api/auth/login', { username, password });
-      onLogin();
+      const r = await api<{ mustChangePassword: boolean }>('POST', '/api/auth/login', { username, password });
+      onLogin(r.mustChangePassword);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -28,7 +28,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         <p className="muted">Sign in to manage connections and tools.</p>
         <label>
           Username
-          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
         </label>
         <label>
           Password
@@ -37,7 +37,6 @@ export function Login({ onLogin }: { onLogin: () => void }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
-            autoFocus
           />
         </label>
         {error && <div className="error-text">{error}</div>}

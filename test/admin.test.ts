@@ -40,7 +40,7 @@ describe('admin auth', () => {
     const bad = await req('POST', '/api/auth/login', { username: 'admin', password: 'nope' });
     expect(bad.statusCode).toBe(401);
     await login();
-    expect((await req('GET', '/api/auth/me')).json()).toEqual({ authenticated: true });
+    expect((await req('GET', '/api/auth/me')).json()).toEqual({ authenticated: true, username: 'admin', mustChangePassword: false });
     expect((await req('GET', '/api/tools')).statusCode).toBe(200);
   });
 
@@ -50,10 +50,53 @@ describe('admin auth', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('rejects a tampered session cookie', async () => {
+    await login();
+    cookie = cookie.replace('admin', 'root');
+    expect((await req('GET', '/api/tools')).statusCode).toBe(401);
+  });
+
+  it('changes the password', async () => {
+    await login();
+    const wrong = await req('POST', '/api/auth/password', { currentPassword: 'nope', newPassword: 'another-password' });
+    expect(wrong.statusCode).toBe(400);
+    const weak = await req('POST', '/api/auth/password', { currentPassword: ADMIN_PASSWORD, newPassword: 'short' });
+    expect(weak.json().errors).toEqual(['Password must be at least 8 characters']);
+    const ok = await req('POST', '/api/auth/password', { currentPassword: ADMIN_PASSWORD, newPassword: 'another-password' });
+    expect(ok.statusCode).toBe(200);
+    const relogin = await req('POST', '/api/auth/login', { username: 'admin', password: 'another-password' });
+    expect(relogin.statusCode).toBe(200);
+  });
+
   it('logout clears the session', async () => {
     await login();
     const res = await req('POST', '/api/auth/logout');
     expect(String(res.headers['set-cookie'])).toContain('sqlmcp_session=;');
+  });
+});
+
+describe('first-time setup', () => {
+  beforeEach(async () => {
+    await ctx.cleanup();
+    ctx = await setupApp({ freshAdmin: true });
+  });
+
+  it('logs in with admin/admin and forces a password change before anything else', async () => {
+    const res = await req('POST', '/api/auth/login', { username: 'admin', password: 'admin' });
+    expect(res.json()).toEqual({ ok: true, mustChangePassword: true });
+    cookie = String(res.headers['set-cookie']).split(';')[0];
+
+    expect((await req('GET', '/api/auth/me')).json()).toEqual({ authenticated: true, username: 'admin', mustChangePassword: true });
+    const blocked = await req('GET', '/api/tools');
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().mustChangePassword).toBe(true);
+
+    const reuse = await req('POST', '/api/auth/password', { currentPassword: 'admin', newPassword: 'admin' });
+    expect(reuse.statusCode).toBe(400);
+
+    await req('POST', '/api/auth/password', { currentPassword: 'admin', newPassword: 'a-new-password' });
+    expect((await req('GET', '/api/tools')).statusCode).toBe(200);
+    expect((await req('POST', '/api/auth/login', { username: 'admin', password: 'admin' })).statusCode).toBe(401);
   });
 });
 

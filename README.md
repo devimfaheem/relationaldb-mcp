@@ -23,11 +23,11 @@ docker run -d --name sql-mcp -p 3000:3000 \
   -v sqlmcp-data:/data \
   -e API_KEY="$(openssl rand -hex 32)" \
   -e SECRET_KEY="$(openssl rand -hex 32)" \
-  -e ADMIN_PASSWORD="choose-a-password" \
   ghcr.io/devimfaheem/relationaldb-mcp:latest
 ```
 
-Open http://localhost:3000, sign in as `admin`, add a connection, then create a tool.
+Open http://localhost:3000 and sign in with **`admin` / `admin`**. You'll be asked to choose a new password straight away.
+Then add a connection and create a tool.
 Run `docker exec sql-mcp printenv API_KEY` to get the key Claude will use.
 
 > The image is published when a `v*` tag is pushed. You can also build it yourself: `docker build -t relationaldb-mcp .`
@@ -38,7 +38,7 @@ The repo includes a compose file with sample MySQL and PostgreSQL databases (and
 
 ```bash
 git clone https://github.com/devimfaheem/relationaldb-mcp.git && cd relationaldb-mcp
-cp .env.example .env        # fill in API_KEY, SECRET_KEY and ADMIN_PASSWORD
+cp .env.example .env        # fill in API_KEY and SECRET_KEY
 docker compose up --build   # add --profile mssql to include SQL Server
 ```
 
@@ -147,13 +147,27 @@ Placeholders are converted to each engine's native parameters (`?` for MySQL, `$
 |---|---|---|---|
 | `API_KEY` | yes | | Key Claude uses to call `/mcp`. At least 32 characters. |
 | `SECRET_KEY` | yes | | Encrypts stored passwords and signs sessions. At least 32 characters. **If you change it, stored passwords can no longer be decrypted.** |
-| `ADMIN_PASSWORD` | yes | | Admin UI password. At least 8 characters. |
-| `ADMIN_USERNAME` | | `admin` | |
 | `PORT` | | `3000` | |
-| `DATA_DIR` | | `/data` | Where connection and tool JSON files live. |
+| `DATA_DIR` | | `/data` | Where connection and tool JSON files and the `sqlmcp.db` app database live. |
 | `ALLOW_QUERY_KEY` | | `false` | Accept the key as `?key=`, for claude.ai connectors. |
 | `TRUST_PROXY` | | `false` | Set to `true` behind a TLS-terminating reverse proxy. |
 | `LOG_LEVEL` | | `info` | |
+
+## Admin login and the app database
+
+On first start the server creates `DATA_DIR/sqlmcp.db`, a small SQLite database for admin users, and runs its migrations
+(`src/server/migrations.ts`). The first migration creates the `users` table, and the second seeds an **`admin` / `admin`**
+login that must be changed before anything else can be done in the UI. Migrations are tracked in a `schema_migrations`
+table, so restarts never re-seed or overwrite your password.
+
+Forgot the password? Reset it to `admin` / `admin` (you'll be asked to change it again on next sign-in):
+
+```bash
+docker exec sql-mcp node dist/server/reset-admin.js      # Docker
+npm run reset-admin                                      # from source (uses DATA_DIR)
+```
+
+Back up `/data` to keep your tools, connections and login.
 
 ## Security
 
@@ -172,7 +186,7 @@ Placeholders are converted to each engine's native parameters (`?` for MySQL, `$
 ```bash
 npm install
 cp .env.example .env            # set DATA_DIR=./data for local runs
-npm run build && node --env-file=.env dist/server/index.js
+npm run build && node --env-file=.env --disable-warning=ExperimentalWarning dist/server/index.js
 npm run dev:ui                  # UI with hot reload on :5173 (proxies /api to :3000)
 npm test
 ```

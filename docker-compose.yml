@@ -1,5 +1,5 @@
 # Demo stack: the MCP server plus sample MySQL and PostgreSQL databases.
-#   cp .env.example .env   # then fill in API_KEY, SECRET_KEY, ADMIN_PASSWORD
+#   cp .env.example .env   # then fill in API_KEY and SECRET_KEY (admin login starts as admin/admin)
 #   docker compose up --build
 # Add SQL Server too with:  docker compose --profile mssql up --build
 services:

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Invalid } from './api';
+import { ChangePassword } from './ChangePassword';
 import { Connections } from './Connections';
 import { Login } from './Login';
 import { Tools } from './Tools';
@@ -8,6 +9,8 @@ type Tab = 'tools' | 'connections';
 
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [mustChange, setMustChange] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [tab, setTab] = useState<Tab>('tools');
   const [invalid, setInvalid] = useState<Invalid[]>([]);
   const [version, setVersion] = useState('');
@@ -22,17 +25,31 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    api<{ authenticated: boolean }>('GET', '/api/auth/me')
-      .then((r) => setAuthed(r.authenticated))
+    api<{ authenticated: boolean; mustChangePassword?: boolean }>('GET', '/api/auth/me')
+      .then((r) => {
+        setAuthed(r.authenticated);
+        setMustChange(!!r.mustChangePassword);
+      })
       .catch(() => setAuthed(false));
   }, []);
 
   useEffect(() => {
-    if (authed) refreshStatus();
-  }, [authed, refreshStatus]);
+    if (authed && !mustChange) refreshStatus();
+  }, [authed, mustChange, refreshStatus]);
 
   if (authed === null) return null;
-  if (!authed) return <Login onLogin={() => setAuthed(true)} />;
+  if (!authed)
+    return (
+      <Login
+        onLogin={(mustChangePassword) => {
+          setMustChange(mustChangePassword);
+          setAuthed(true);
+        }}
+      />
+    );
+  if (mustChange) return <ChangePassword forced onDone={() => setMustChange(false)} />;
+  if (changingPassword)
+    return <ChangePassword forced={false} onDone={() => setChangingPassword(false)} onCancel={() => setChangingPassword(false)} />;
 
   const logout = async () => {
     await api('POST', '/api/auth/logout');
@@ -53,6 +70,9 @@ export function App() {
             Connections
           </button>
         </nav>
+        <button className="ghost" onClick={() => setChangingPassword(true)}>
+          Change password
+        </button>
         <button className="ghost" onClick={logout}>
           Log out
         </button>
