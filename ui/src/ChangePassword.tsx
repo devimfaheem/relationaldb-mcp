@@ -46,7 +46,9 @@ export function ChangePassword({ forced, onDone, onCancel }: Props) {
           </label>
         )}
         <label>
-          New password <span className="muted">(at least 8 characters)</span>
+          <span>
+            New password <span className="muted">(at least 8 characters)</span>
+          </span>
           <input type="password" value={newPassword} onChange={(e) => setNew(e.target.value)} autoComplete="new-password" autoFocus={forced} />
         </label>
         <label>
